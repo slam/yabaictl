@@ -3,21 +3,13 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
-use anyhow::Result;
-use structopt::clap::arg_enum;
+use anyhow::{bail, Result};
 use structopt::StructOpt;
 
-mod states;
+use crate::yabai::Direction;
 
-arg_enum! {
-    #[derive(Debug)]
-    enum Direction {
-        North,
-        East,
-        South,
-        West,
-    }
-}
+mod states;
+mod yabai;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -25,7 +17,7 @@ arg_enum! {
     about = "A yabai wrapper for better multi-display support ."
 )]
 enum Cli {
-    UpdateSpaces {},
+    RestoreSpaces {},
     FocusSpace {
         space: u32,
     },
@@ -49,7 +41,7 @@ fn main() -> Result<()> {
         Cli::SwapWindow { direction } => swap_window(direction)?,
         Cli::WarpWindow { direction } => warp_window(direction)?,
         Cli::FocusSpace { space } => focus_space(space)?,
-        Cli::UpdateSpaces {} => update_spaces()?,
+        Cli::RestoreSpaces {} => restore_spaces()?,
     }
 
     Ok(())
@@ -57,25 +49,25 @@ fn main() -> Result<()> {
 
 fn focus_window(direction: Direction) -> Result<()> {
     println!("{:?}", direction);
-    Ok(())
+    bail!("Not implemented yet")
 }
 
 fn swap_window(direction: Direction) -> Result<()> {
     println!("{:?}", direction);
-    Ok(())
+    bail!("Not implemented yet")
 }
 
 fn warp_window(direction: Direction) -> Result<()> {
     println!("{:?}", direction);
-    Ok(())
+    bail!("Not implemented yet")
 }
 
 fn focus_space(space: u32) -> Result<()> {
     println!("{:?}", space);
-    Ok(())
+    bail!("Not implemented yet")
 }
 
-fn update_spaces() -> Result<()> {
+fn restore_spaces() -> Result<()> {
     let states = states::query()?;
     println!("yabai query returned {:?}", states);
     states::save_yabai(states)?;

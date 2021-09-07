@@ -1,10 +1,11 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
-use std::process::Command;
+
+use crate::yabai::{yabai_query, QueryDomain};
 
 static YABAICTL_STATE: &str = "yabaictl";
 static YABAI_STATE: &str = "yabai";
@@ -89,50 +90,13 @@ struct Window {
     native_fullscreen: u32,
 }
 
-enum QueryParam {
-    Windows,
-    Spaces,
-    Displays,
-}
-
-impl QueryParam {
-    pub fn as_str(&self) -> &'static str {
-        match *self {
-            QueryParam::Windows => "--windows",
-            QueryParam::Spaces => "--spaces",
-            QueryParam::Displays => "--displays",
-        }
-    }
-}
-
-fn yabai_query<T>(param: QueryParam) -> Result<T>
-where
-    T: DeserializeOwned,
-{
-    let output = Command::new("yabai")
-        .arg("-m")
-        .arg("query")
-        .arg(param.as_str())
-        .output()?;
-
-    if !output.status.success() {
-        let err = String::from_utf8(output.stderr)?;
-        bail!("Failed to execute yabai query: {}", err);
-    }
-
-    let raw = String::from_utf8(output.stdout)?;
-    let json: T = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to deserialize JSON: {}", raw))?;
-    Ok(json)
-}
-
 pub fn query() -> Result<YabaiStates> {
     let windows: Vec<Window> =
-        yabai_query(QueryParam::Windows).context("Failed to query yabai for the window states")?;
-    let displays: Vec<Display> = yabai_query(QueryParam::Displays)
+        yabai_query(QueryDomain::Windows).context("Failed to query yabai for the window states")?;
+    let displays: Vec<Display> = yabai_query(QueryDomain::Displays)
         .context("Failed to query yabai for the display states")?;
     let spaces: Vec<Space> =
-        yabai_query(QueryParam::Spaces).context("Failed to query yabai for the space states")?;
+        yabai_query(QueryDomain::Spaces).context("Failed to query yabai for the space states")?;
     let states = YabaiStates {
         windows,
         displays,
@@ -177,6 +141,6 @@ pub fn load_yabai() -> Result<YabaiStates> {
 }
 
 pub fn save_yabai(states: YabaiStates) -> Result<()> {
-    let r = save(&states, YABAI_STATE)?;
-    Ok(r)
+    save(&states, YABAI_STATE)?;
+    Ok(())
 }
