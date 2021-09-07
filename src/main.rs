@@ -76,13 +76,11 @@ fn focus_space(space: u32) -> Result<()> {
 }
 
 fn update_spaces() -> Result<()> {
-    let states = states::fetch_from_yabai()?;
+    let states = states::query()?;
+    println!("yabai query returned {:?}", states);
+    states::save_yabai(states)?;
 
-    println!(
-        "update_spaces {:?} {:?} {:?}",
-        states::load_yabaictl()?,
-        states::load_yabai()?,
-        states
-    );
+    println!("load_yabaictl returned {:?}", states::load_yabaictl()?,);
+    println!("load_yabai returned {:?}", states::load_yabai()?,);
     Ok(())
 }

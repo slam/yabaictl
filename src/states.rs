@@ -1,8 +1,13 @@
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
-use std::fs::read_to_string;
+use serde::ser::Serialize;
+use std::fs;
+use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
+
+static YABAICTL_STATE: &str = "yabaictl";
+static YABAI_STATE: &str = "yabai";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct YabaictlStates {
@@ -121,7 +126,7 @@ where
     Ok(json)
 }
 
-pub fn fetch_from_yabai() -> Result<YabaiStates> {
+pub fn query() -> Result<YabaiStates> {
     let windows: Vec<Window> =
         yabai_query(QueryParam::Windows).context("Failed to query yabai for the window states")?;
     let displays: Vec<Display> = yabai_query(QueryParam::Displays)
@@ -136,24 +141,42 @@ pub fn fetch_from_yabai() -> Result<YabaiStates> {
     Ok(states)
 }
 
-fn load_from_file<T>(filename: &str) -> Result<T>
+fn save<T>(states: &T, filename: &str) -> Result<()>
+where
+    T: Serialize,
+{
+    let file = File::create(get_full_path(filename)?)?;
+    let result = serde_json::to_writer(file, states)?;
+    Ok(result)
+}
+
+fn load<T>(filename: &str) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    let home = std::env::var("HOME")?;
-    let path = &PathBuf::from(format!("{}/.cache/{}", home, filename));
-    let output = read_to_string(path)?;
+    let output = fs::read_to_string(get_full_path(filename)?)?;
     let json: T = serde_json::from_str(&output)
         .with_context(|| format!("Failed to deserialize JSON: {}", output))?;
     Ok(json)
 }
 
+fn get_full_path(filename: &str) -> Result<PathBuf> {
+    let home = std::env::var("HOME")?;
+    let path = PathBuf::from(format!("{}/.cache/{}", home, filename));
+    Ok(path)
+}
+
 pub fn load_yabaictl() -> Result<YabaictlStates> {
-    let states: YabaictlStates = load_from_file("yabaictl")?;
+    let states: YabaictlStates = load(YABAICTL_STATE)?;
     Ok(states)
 }
 
 pub fn load_yabai() -> Result<YabaiStates> {
-    let states: YabaiStates = load_from_file("yabai")?;
+    let states: YabaiStates = load(YABAI_STATE)?;
     Ok(states)
+}
+
+pub fn save_yabai(states: YabaiStates) -> Result<()> {
+    let r = save(&states, YABAI_STATE)?;
+    Ok(r)
 }
