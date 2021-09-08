@@ -41,7 +41,7 @@ fn main() -> Result<()> {
         Cli::SwapWindow { direction } => swap_window(direction)?,
         Cli::WarpWindow { direction } => warp_window(direction)?,
         Cli::FocusSpace { space } => focus_space(space)?,
-        Cli::RestoreSpaces {} => restore_spaces()?,
+        Cli::RestoreSpaces {} => yabai::restore_spaces()?,
     }
 
     Ok(())
@@ -65,14 +65,4 @@ fn warp_window(direction: Direction) -> Result<()> {
 fn focus_space(space: u32) -> Result<()> {
     println!("{:?}", space);
     bail!("Not implemented yet")
-}
-
-fn restore_spaces() -> Result<()> {
-    let states = states::query()?;
-    println!("yabai query returned {:?}", states);
-    states::save_yabai(states)?;
-
-    println!("load_yabaictl returned {:?}", states::load_yabaictl()?,);
-    println!("load_yabai returned {:?}", states::load_yabai()?,);
-    Ok(())
 }

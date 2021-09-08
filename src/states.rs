@@ -5,8 +5,6 @@ use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 
-use crate::yabai::{yabai_query, QueryDomain};
-
 static YABAICTL_STATE: &str = "yabaictl";
 static YABAI_STATE: &str = "yabai";
 
@@ -17,13 +15,19 @@ pub struct YabaictlStates {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct YabaiStates {
-    spaces: Vec<Space>,
-    displays: Vec<Display>,
-    windows: Vec<Window>,
+    pub spaces: Vec<Space>,
+    pub displays: Vec<Display>,
+    pub windows: Vec<Window>,
+}
+
+impl YabaiStates {
+    pub fn num_spaces(&self) -> usize {
+        return self.spaces.len();
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Space {
+pub struct Space {
     id: u32,
     label: String,
     index: u32,
@@ -41,7 +45,7 @@ struct Space {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Display {
+pub struct Display {
     id: u32,
     uuid: String,
     index: u32,
@@ -58,7 +62,7 @@ struct Frame {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Window {
+pub struct Window {
     id: u32,
     pid: u32,
     app: String,
@@ -88,21 +92,6 @@ struct Window {
     zoom_fullscreen: u32,
     #[serde(rename = "native-fullscreen")]
     native_fullscreen: u32,
-}
-
-pub fn query() -> Result<YabaiStates> {
-    let windows: Vec<Window> =
-        yabai_query(QueryDomain::Windows).context("Failed to query yabai for the window states")?;
-    let displays: Vec<Display> = yabai_query(QueryDomain::Displays)
-        .context("Failed to query yabai for the display states")?;
-    let spaces: Vec<Space> =
-        yabai_query(QueryDomain::Spaces).context("Failed to query yabai for the space states")?;
-    let states = YabaiStates {
-        windows,
-        displays,
-        spaces,
-    };
-    Ok(states)
 }
 
 fn save<T>(states: &T, filename: &str) -> Result<()>
@@ -140,7 +129,7 @@ pub fn load_yabai() -> Result<YabaiStates> {
     Ok(states)
 }
 
-pub fn save_yabai(states: YabaiStates) -> Result<()> {
-    save(&states, YABAI_STATE)?;
+pub fn save_yabai(states: &YabaiStates) -> Result<()> {
+    save(states, YABAI_STATE)?;
     Ok(())
 }
