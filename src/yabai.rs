@@ -41,7 +41,7 @@ impl QueryDomain {
 pub fn yabai_message<T: AsRef<OsStr>>(msgs: &[T]) -> Result<String> {
     let mut command = Command::new("yabai");
     command.arg("-m");
-    for msg in msgs.into_iter() {
+    for msg in msgs.iter() {
         command.arg(msg);
     }
 
@@ -88,7 +88,12 @@ fn label_space(space_index: u32, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn ensure_spaces(states: YabaiStates) -> Result<YabaiStates> {
+fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
+    yabai_message(&["window", &window_id.to_string(), "--space", space])?;
+    Ok(())
+}
+
+fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     // Add one for the unused Desktop 1. See comments in ensure_labels() for
     // more details.
     let target = NUM_SPACES + 1;
@@ -105,7 +110,7 @@ fn ensure_spaces(states: YabaiStates) -> Result<YabaiStates> {
     Ok(query()?)
 }
 
-fn ensure_labels(states: YabaiStates) -> Result<YabaiStates> {
+fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
     // Desktop 1 is reserved. We don't put anything there because of this apple
     // issue:
     //
@@ -161,10 +166,29 @@ fn ensure_labels(states: YabaiStates) -> Result<YabaiStates> {
     Ok(query()?)
 }
 
+fn reorganize_spaces(_states: &YabaiStates) -> Result<YabaiStates> {
+    let old_states = states::load_yabai()?;
+
+    for space in old_states.spaces.iter() {
+        for window_id in space.windows.iter() {
+            if space.label == "reserved" {
+                move_window_to_space(window_id, "s1")?;
+            } else {
+                // TODO: skip the move if the window is already in the right
+                // space.
+                move_window_to_space(window_id, &space.label)?;
+            }
+        }
+    }
+
+    Ok(query()?)
+}
+
 pub fn restore_spaces() -> Result<()> {
     let states = query()?;
-    let states = ensure_spaces(states)?;
-    let states = ensure_labels(states)?;
+    let states = ensure_spaces(&states)?;
+    let states = ensure_labels(&states)?;
+    let states = reorganize_spaces(&states)?;
     states::save_yabai(&states)?;
 
     println!("load_yabaictl returned {:?}", states::load_yabaictl()?,);

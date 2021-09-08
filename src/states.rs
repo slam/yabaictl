@@ -33,10 +33,10 @@ impl YabaiStates {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Space {
     id: u32,
-    label: String,
+    pub label: String,
     index: u32,
     display: u32,
-    windows: Vec<u32>,
+    pub windows: Vec<u32>,
     r#type: String,
     visible: u32,
     focused: u32,
