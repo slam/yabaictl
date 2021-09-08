@@ -24,6 +24,10 @@ impl YabaiStates {
     pub fn num_spaces(&self) -> usize {
         return self.spaces.len();
     }
+
+    pub fn num_displays(&self) -> usize {
+        return self.displays.len();
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

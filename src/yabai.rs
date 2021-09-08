@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
+use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::process::Command;
 use std::time::Instant;
@@ -61,9 +62,7 @@ pub fn yabai_query<T>(param: QueryDomain) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    let args = vec!["query", param.as_str()];
-
-    let raw = yabai_message(&args)?;
+    let raw = yabai_message(&["query", param.as_str()])?;
     let json: T = serde_json::from_str(&raw)
         .with_context(|| format!("Failed to deserialize JSON: {}", raw))?;
     Ok(json)
@@ -84,9 +83,80 @@ pub fn query() -> Result<YabaiStates> {
     Ok(states)
 }
 
+fn label_space(space_index: u32, label: &str) -> Result<()> {
+    yabai_message(&["space", &space_index.to_string(), "--label", label])?;
+    Ok(())
+}
+
 fn ensure_spaces(states: YabaiStates) -> Result<YabaiStates> {
-    for _i in states.num_spaces()..=NUM_SPACES {
-        yabai_message(&["space", "--create"])?;
+    // Add one for the unused Desktop 1. See comments in ensure_labels() for
+    // more details.
+    let target = NUM_SPACES + 1;
+
+    if states.num_spaces() < target {
+        for _i in states.num_spaces()..NUM_SPACES + 1 {
+            yabai_message(&["space", "--create"])?;
+        }
+    } else if states.num_spaces() > target {
+        for _i in target + 1..=states.num_spaces() {
+            yabai_message(&["space", &(target + 1).to_string(), "--destroy"])?;
+        }
+    }
+    Ok(query()?)
+}
+
+fn ensure_labels(states: YabaiStates) -> Result<YabaiStates> {
+    // Desktop 1 is reserved. We don't put anything there because of this apple
+    // issue:
+    //
+    // https://github.com/koekeishiya/yabai/discussions/238#discussioncomment-193399
+    label_space(1, "reserved")?;
+
+    match states.num_displays() {
+        1 => {
+            // One monitor is easy. Just label Desktop 2 as s1, D3 as s2, D4 as
+            // s3, and so on. (Again, as mentioned above, we leave Desktop 1
+            // unused to get around a quirk in MacOS).
+            for i in 1..states.num_spaces() {
+                label_space((i + 1).try_into()?, &format!("s{}", i))?;
+            }
+        }
+        2 => {
+            // This is the arrangement for two monitors with the one on the
+            // right as primary:
+            //
+            // Right monitor:
+            //
+            // reserved s2 s4 s6 s8 s10 <= yabai space labels
+            // Desktop1 D2 D3 D4 D5 D6  <= MacOS Desktop
+            //
+            // Left monitor:
+            //
+            // s1 s3 s5 s7  s9
+            // D7 D8 D9 D10 D11
+            //
+            // With this arrangement, s1 and s2 form a single composite desktop,
+            // so are s3 and s4, s5 and s6, and so on.
+            //
+            // The `focus_space` subcommand would switch two monitors in unison
+            // as a single desktop.
+            for i in 1..states.num_spaces() {
+                if i <= NUM_SPACES / 2 {
+                    label_space((i + 1).try_into()?, &format!("s{}", i * 2))?;
+                } else {
+                    label_space(
+                        (i + 1).try_into()?,
+                        &format!("s{}", (i - NUM_SPACES / 2) * 2 - 1),
+                    )?;
+                }
+            }
+        }
+        _ => {
+            bail!(
+                "Don't know how to handle {} monitors",
+                states.num_displays()
+            );
+        }
     }
     Ok(query()?)
 }
@@ -94,6 +164,7 @@ fn ensure_spaces(states: YabaiStates) -> Result<YabaiStates> {
 pub fn restore_spaces() -> Result<()> {
     let states = query()?;
     let states = ensure_spaces(states)?;
+    let states = ensure_labels(states)?;
     states::save_yabai(&states)?;
 
     println!("load_yabaictl returned {:?}", states::load_yabaictl()?,);
