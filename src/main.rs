@@ -4,9 +4,10 @@ extern crate serde;
 extern crate serde_json;
 
 use anyhow::{bail, Result};
+use std::convert::TryInto;
 use structopt::StructOpt;
 
-use crate::yabai::Direction;
+use crate::yabai::{SpaceArg, WindowArg};
 
 mod states;
 mod yabai;
@@ -19,19 +20,21 @@ mod yabai;
 enum Cli {
     RestoreSpaces {},
     FocusSpace {
-        space: u32,
+        #[structopt(parse(try_from_str = parse_space_arg),
+         help="[a space number, next, prev, recent]")]
+        space: SpaceArg,
     },
     FocusWindow {
-        #[structopt(possible_values = &Direction::variants(), case_insensitive = true)]
-        direction: Direction,
+        #[structopt(possible_values = &WindowArg::variants(), case_insensitive = true)]
+        direction: WindowArg,
     },
     SwapWindow {
-        #[structopt(possible_values = &Direction::variants(), case_insensitive = true)]
-        direction: Direction,
+        #[structopt(possible_values = &WindowArg::variants(), case_insensitive = true)]
+        direction: WindowArg,
     },
     WarpWindow {
-        #[structopt(possible_values = &Direction::variants(), case_insensitive = true)]
-        direction: Direction,
+        #[structopt(possible_values = &WindowArg::variants(), case_insensitive = true)]
+        direction: WindowArg,
     },
 }
 
@@ -40,29 +43,39 @@ fn main() -> Result<()> {
         Cli::FocusWindow { direction } => focus_window(direction)?,
         Cli::SwapWindow { direction } => swap_window(direction)?,
         Cli::WarpWindow { direction } => warp_window(direction)?,
-        Cli::FocusSpace { space } => focus_space(space)?,
+        Cli::FocusSpace { space } => yabai::focus_space(space)?,
         Cli::RestoreSpaces {} => yabai::restore_spaces()?,
     }
 
     Ok(())
 }
 
-fn focus_window(direction: Direction) -> Result<()> {
+fn parse_space_arg(src: &str) -> Result<SpaceArg> {
+    match src {
+        "next" => return Ok(SpaceArg::Next),
+        "prev" => return Ok(SpaceArg::Prev),
+        "recent" => return Ok(SpaceArg::Recent),
+        _ => {
+            let space = u32::from_str_radix(src, 10)?;
+            if space == 0 || space > yabai::NUM_SPACES {
+                bail!("Space {} out of range", space);
+            }
+            return Ok(SpaceArg::Space(space.try_into()?));
+        }
+    }
+}
+
+fn focus_window(direction: WindowArg) -> Result<()> {
     println!("{:?}", direction);
     bail!("Not implemented yet")
 }
 
-fn swap_window(direction: Direction) -> Result<()> {
+fn swap_window(direction: WindowArg) -> Result<()> {
     println!("{:?}", direction);
     bail!("Not implemented yet")
 }
 
-fn warp_window(direction: Direction) -> Result<()> {
+fn warp_window(direction: WindowArg) -> Result<()> {
     println!("{:?}", direction);
-    bail!("Not implemented yet")
-}
-
-fn focus_space(space: u32) -> Result<()> {
-    println!("{:?}", space);
     bail!("Not implemented yet")
 }

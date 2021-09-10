@@ -6,19 +6,26 @@ use std::process::Command;
 use std::time::Instant;
 use structopt::clap::arg_enum;
 
-use crate::states;
-use crate::states::{Display, Space, Window, YabaiStates};
+use crate::states::{self, Display, Space, Window, YabaiStates, YabaictlStates};
 
-const NUM_SPACES: usize = 10;
+pub const NUM_SPACES: u32 = 10;
 
 arg_enum! {
     #[derive(Debug)]
-    pub enum Direction {
+    pub enum WindowArg {
         North,
         East,
         South,
         West,
     }
+}
+
+#[derive(Debug)]
+pub enum SpaceArg {
+    Next,
+    Prev,
+    Recent,
+    Space(u32),
 }
 
 #[derive(Debug)]
@@ -90,6 +97,11 @@ fn label_space(space_index: u32, label: &str) -> Result<()> {
 
 fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
     yabai_message(&["window", &window_id.to_string(), "--space", space])?;
+    Ok(())
+}
+
+fn focus_space_by_label(label_index: u32) -> Result<()> {
+    yabai_message(&["space", "--focus", &format!("s{}", label_index)])?;
     Ok(())
 }
 
@@ -193,10 +205,68 @@ pub fn restore_spaces() -> Result<()> {
     let states = ensure_labels(&states)?;
     let states = reorganize_spaces(&states)?;
     states::save_yabai(&states)?;
+    Ok(())
+}
 
-    println!("load_yabaictl returned {:?}", states::load_yabaictl()?,);
-    println!("load_yabai returned {:?}", states::load_yabai()?,);
+pub fn focus_space(space: SpaceArg) -> Result<()> {
+    let states = query()?;
+    let focused_space = states.focused_space().expect("No focused space found");
+    let focused_space = focused_space.index - 1;
+    let label_index = match space {
+        SpaceArg::Recent => {
+            let ctl = states::load_yabaictl()?;
+            if ctl.recent > states.num_spaces() {
+                bail!(
+                    "recent space {} > number of spaces {}",
+                    ctl.recent,
+                    states.num_spaces()
+                )
+            }
+            ctl.recent
+        }
+        SpaceArg::Next => {
+            let index = focused_space + states.num_displays();
+            if index > NUM_SPACES {
+                index % NUM_SPACES
+            } else {
+                index
+            }
+        }
+        SpaceArg::Prev => {
+            if focused_space <= states.num_displays() {
+                states.num_spaces() - (states.num_displays() - focused_space)
+            } else {
+                focused_space - states.num_displays()
+            }
+        }
+        SpaceArg::Space(number) => number,
+    };
+    match states.num_displays() {
+        1 => {
+            focus_space_by_label(label_index)?;
+        }
+        2 => {
+            // This is to bring both desktops to focus
+            if label_index % 2 == 0 {
+                focus_space_by_label(label_index - 1)?;
+            } else {
+                focus_space_by_label(label_index + 1)?;
+            }
+            focus_space_by_label(label_index)?;
+        }
+        _ => {
+            bail!(
+                "Don't know how to handle {} monitors",
+                states.num_displays()
+            );
+        }
+    }
 
-    println!("yabai query returned {:?}", states);
+    let ctl = &YabaictlStates {
+        recent: focused_space,
+    };
+    states::save_yabaictl(ctl)?;
+    let states = query()?;
+    states::save_yabai(&states)?;
     Ok(())
 }

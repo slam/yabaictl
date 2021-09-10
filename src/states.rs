@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
+use std::convert::TryInto;
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
@@ -10,7 +11,7 @@ static YABAI_STATE: &str = "yabai";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct YabaictlStates {
-    recent: u32,
+    pub recent: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -21,12 +22,16 @@ pub struct YabaiStates {
 }
 
 impl YabaiStates {
-    pub fn num_spaces(&self) -> usize {
-        return self.spaces.len();
+    pub fn num_spaces(&self) -> u32 {
+        return self.spaces.len().try_into().unwrap();
     }
 
-    pub fn num_displays(&self) -> usize {
-        return self.displays.len();
+    pub fn num_displays(&self) -> u32 {
+        return self.displays.len().try_into().unwrap();
+    }
+
+    pub fn focused_space(&self) -> Option<&Space> {
+        self.spaces.iter().find(|space| space.focused == 1)
     }
 
     pub fn find_space_by_label(&self, label: &str) -> Option<&Space> {
@@ -46,7 +51,7 @@ impl YabaiStates {
 pub struct Space {
     id: u32,
     pub label: String,
-    index: u32,
+    pub index: u32,
     display: u32,
     pub windows: Vec<u32>,
     r#type: String,
@@ -153,5 +158,10 @@ pub fn load_yabai() -> Result<YabaiStates> {
 
 pub fn save_yabai(states: &YabaiStates) -> Result<()> {
     save(states, YABAI_STATE)?;
+    Ok(())
+}
+
+pub fn save_yabaictl(states: &YabaictlStates) -> Result<()> {
+    save(states, YABAICTL_STATE)?;
     Ok(())
 }
