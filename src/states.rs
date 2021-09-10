@@ -28,6 +28,18 @@ impl YabaiStates {
     pub fn num_displays(&self) -> usize {
         return self.displays.len();
     }
+
+    pub fn find_space_by_label(&self, label: &str) -> Option<&Space> {
+        self.spaces.iter().find(|&space| space.label == label)
+    }
+
+    pub fn find_window_id_in_space(&self, space_label: &str, window_id: &u32) -> Option<&u32> {
+        let space = self.find_space_by_label(space_label);
+        match space {
+            None => return None,
+            Some(space) => return space.find_window_id(window_id),
+        };
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,6 +58,12 @@ pub struct Space {
     first_window: u32,
     #[serde(rename = "last-window")]
     last_window: u32,
+}
+
+impl Space {
+    pub fn find_window_id(&self, window_id: &u32) -> Option<&u32> {
+        self.windows.iter().find(|&id| id == window_id)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

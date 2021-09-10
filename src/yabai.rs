@@ -166,7 +166,7 @@ fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
     Ok(query()?)
 }
 
-fn reorganize_spaces(_states: &YabaiStates) -> Result<YabaiStates> {
+fn reorganize_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     let old_states = states::load_yabai()?;
 
     for space in old_states.spaces.iter() {
@@ -174,9 +174,12 @@ fn reorganize_spaces(_states: &YabaiStates) -> Result<YabaiStates> {
             if space.label == "reserved" {
                 move_window_to_space(window_id, "s1")?;
             } else {
-                // TODO: skip the move if the window is already in the right
-                // space.
-                move_window_to_space(window_id, &space.label)?;
+                if states
+                    .find_window_id_in_space(&space.label, window_id)
+                    .is_none()
+                {
+                    move_window_to_space(window_id, &space.label)?;
+                }
             }
         }
     }
