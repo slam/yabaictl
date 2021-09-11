@@ -211,7 +211,7 @@ pub fn restore_spaces() -> Result<()> {
 pub fn focus_space(space: SpaceArg) -> Result<()> {
     let states = query()?;
     let focused_space = states.focused_space().expect("No focused space found");
-    let focused_space = focused_space.index - 1;
+    let label_index = focused_space.label_index().expect("Invalid space label");
     let label_index = match space {
         SpaceArg::Recent => {
             let ctl = states::load_yabaictl()?;
@@ -225,7 +225,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             ctl.recent
         }
         SpaceArg::Next => {
-            let index = focused_space + states.num_displays();
+            let index = label_index + states.num_displays();
             if index > NUM_SPACES {
                 index % NUM_SPACES
             } else {
@@ -233,10 +233,10 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             }
         }
         SpaceArg::Prev => {
-            if focused_space <= states.num_displays() {
-                states.num_spaces() - (states.num_displays() - focused_space)
+            if label_index <= states.num_displays() {
+                states.num_spaces() - (states.num_displays() - label_index)
             } else {
-                focused_space - states.num_displays()
+                label_index - states.num_displays()
             }
         }
         SpaceArg::Space(number) => number,
@@ -263,7 +263,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
     }
 
     let ctl = &YabaictlStates {
-        recent: focused_space,
+        recent: label_index,
     };
     states::save_yabaictl(ctl)?;
     let states = query()?;

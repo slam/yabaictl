@@ -69,6 +69,17 @@ impl Space {
     pub fn find_window_id(&self, window_id: &u32) -> Option<&u32> {
         self.windows.iter().find(|&id| id == window_id)
     }
+
+    pub fn label_index(&self) -> Option<u32> {
+        if !self.label.starts_with("s") {
+            return None;
+        }
+        let index = u32::from_str_radix(&self.label[1..], 10);
+        match index {
+            Ok(index) => Some(index),
+            Err(_) => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
