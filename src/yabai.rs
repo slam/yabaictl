@@ -14,7 +14,7 @@ pub const NUM_SPACES: u32 = 10;
 const YABAI_FAILURE_BYTE: u8 = 0x07;
 
 arg_enum! {
-    #[derive(Debug)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     pub enum WindowArg {
         North,
         East,
@@ -23,7 +23,35 @@ arg_enum! {
     }
 }
 
-#[derive(Debug)]
+impl WindowArg {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            WindowArg::North => "north",
+            WindowArg::East => "east",
+            WindowArg::South => "south",
+            WindowArg::West => "west",
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum WindowOp {
+    Focus,
+    Swap,
+    Warp,
+}
+
+impl WindowOp {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            WindowOp::Focus => "--focus",
+            WindowOp::Swap => "--swap",
+            WindowOp::Warp => "--warp",
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SpaceArg {
     Next,
     Prev,
@@ -135,6 +163,34 @@ fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
 fn focus_space_by_label(label_index: u32) -> Result<()> {
     yabai_message(&["space", "--focus", &format!("s{}", label_index)])?;
     Ok(())
+}
+
+fn neighbor_space(states: &YabaiStates, direction: WindowArg) -> Option<&Space> {
+    let focused_space = states.focused_space().expect("No focused space found");
+    let label_index = focused_space.label_index().expect("Invalid space label");
+
+    // My main window is on the right
+    let next_label_index = match direction {
+        WindowArg::East => {
+            if label_index % states.num_displays() == 0 {
+                label_index - 1
+            } else {
+                label_index + 1
+            }
+        }
+        WindowArg::West => {
+            if label_index % states.num_displays() == 0 {
+                label_index - 1
+            } else {
+                label_index + 1
+            }
+        }
+        _ => {
+            return None;
+        }
+    };
+
+    states.find_space_by_label_index(next_label_index)
 }
 
 fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
@@ -266,7 +322,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
         }
         SpaceArg::Prev => {
             if label_index <= states.num_displays() {
-                states.num_spaces() - (states.num_displays() - label_index)
+                states.num_spaces() - 1 /* reserved */ - (states.num_displays() - label_index)
             } else {
                 label_index - states.num_displays()
             }
@@ -298,6 +354,100 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
         recent: label_index,
     };
     states::save_yabaictl(ctl)?;
+    let states = query()?;
+    states::save_yabai(&states)?;
+    Ok(())
+}
+
+pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
+    let r = yabai_message(&["window", op.as_str(), direction.as_str()]);
+    match r {
+        Err(e) => {
+            match direction {
+                WindowArg::East => {}
+                WindowArg::West => {}
+                _ => {
+                    return Err(e);
+                }
+            }
+            let e_str = e.to_string();
+            let expected1 = format!(
+                "could not locate a {}ward managed window.\n",
+                direction.as_str()
+            );
+            // This is the error is the space has no windows
+            let expected2 = "could not locate the selected window.\n";
+            if e_str != expected1 && e_str != expected2 {
+                return Err(e);
+            }
+
+            let states = query()?;
+            match states.num_displays() {
+                1 => {
+                    let space = states.focused_space().expect("No focused space found");
+                    let next_window = match direction {
+                        WindowArg::East => space.first_window,
+                        WindowArg::West => space.last_window,
+                        _ => {
+                            return Err(e);
+                        }
+                    };
+                    yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
+                }
+                2 => {
+                    let neighbor_space = neighbor_space(&states, direction);
+                    let neighbor_space = match neighbor_space {
+                        None => {
+                            return Err(e);
+                        }
+                        Some(space) => space,
+                    };
+
+                    match op {
+                        WindowOp::Focus => {
+                            let space = match neighbor_space.windows.len() {
+                                0 => states.focused_space().expect("No focused space found"),
+                                _ => neighbor_space,
+                            };
+                            let next_window = match direction {
+                                WindowArg::East => space.first_window,
+                                WindowArg::West => space.last_window,
+                                _ => {
+                                    return Err(e);
+                                }
+                            };
+                            yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
+                        }
+                        WindowOp::Swap | WindowOp::Warp => {
+                            if neighbor_space.windows.len() == 0 {
+                                // If the neighbor space is empty, just send the
+                                // window there
+                                yabai_message(&["window", "--space", &neighbor_space.label])?;
+                            } else {
+                                let next_window = match direction {
+                                    WindowArg::East => neighbor_space.first_window,
+                                    WindowArg::West => neighbor_space.last_window,
+                                    _ => {
+                                        return Err(e);
+                                    }
+                                };
+                                yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
+                            }
+
+                            yabai_message(&["space", "--focus", &neighbor_space.label])?;
+                        }
+                    };
+                }
+                _ => {
+                    bail!(
+                        "Don't know how to handle {} monitors",
+                        states.num_displays()
+                    );
+                }
+            }
+        }
+        Ok(_) => {}
+    }
     let states = query()?;
     states::save_yabai(&states)?;
     Ok(())

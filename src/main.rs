@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use std::convert::TryInto;
 use structopt::StructOpt;
 
-use crate::yabai::{SpaceArg, WindowArg};
+use crate::yabai::{SpaceArg, WindowArg, WindowOp};
 
 mod states;
 mod yabai;
@@ -40,9 +40,9 @@ enum Cli {
 
 fn main() -> Result<()> {
     match Cli::from_args() {
-        Cli::FocusWindow { direction } => focus_window(direction)?,
-        Cli::SwapWindow { direction } => swap_window(direction)?,
-        Cli::WarpWindow { direction } => warp_window(direction)?,
+        Cli::FocusWindow { direction } => yabai::operate_window(WindowOp::Focus, direction)?,
+        Cli::SwapWindow { direction } => yabai::operate_window(WindowOp::Swap, direction)?,
+        Cli::WarpWindow { direction } => yabai::operate_window(WindowOp::Warp, direction)?,
         Cli::FocusSpace { space } => yabai::focus_space(space)?,
         Cli::RestoreSpaces {} => yabai::restore_spaces()?,
     }
@@ -63,19 +63,4 @@ fn parse_space_arg(src: &str) -> Result<SpaceArg> {
             return Ok(SpaceArg::Space(space.try_into()?));
         }
     }
-}
-
-fn focus_window(direction: WindowArg) -> Result<()> {
-    println!("{:?}", direction);
-    bail!("Not implemented yet")
-}
-
-fn swap_window(direction: WindowArg) -> Result<()> {
-    println!("{:?}", direction);
-    bail!("Not implemented yet")
-}
-
-fn warp_window(direction: WindowArg) -> Result<()> {
-    println!("{:?}", direction);
-    bail!("Not implemented yet")
 }

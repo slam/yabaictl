@@ -38,6 +38,11 @@ impl YabaiStates {
         self.spaces.iter().find(|&space| space.label == label)
     }
 
+    pub fn find_space_by_label_index(&self, label_index: u32) -> Option<&Space> {
+        let label = format!("s{}", label_index);
+        self.spaces.iter().find(|&space| space.label == label)
+    }
+
     pub fn find_window_id_in_space(&self, space_label: &str, window_id: &u32) -> Option<&u32> {
         let space = self.find_space_by_label(space_label);
         match space {
@@ -60,9 +65,9 @@ pub struct Space {
     #[serde(rename = "native-fullscreen")]
     native_fullscreen: u32,
     #[serde(rename = "first-window")]
-    first_window: u32,
+    pub first_window: u32,
     #[serde(rename = "last-window")]
-    last_window: u32,
+    pub last_window: u32,
 }
 
 impl Space {
