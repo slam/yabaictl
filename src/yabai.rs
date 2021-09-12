@@ -1,17 +1,14 @@
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
 use std::convert::TryInto;
-use std::io::prelude::*;
-use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::ffi::OsStr;
+use std::process::Command;
+use std::time::Instant;
 use structopt::clap::arg_enum;
 
 use crate::states::{self, Display, Space, Window, YabaiStates, YabaictlStates};
 
 pub const NUM_SPACES: u32 = 10;
-const YABAI_FAILURE_BYTE: u8 = 0x07;
 
 arg_enum! {
     #[derive(Debug, Copy, Clone, PartialEq)]
@@ -76,40 +73,23 @@ impl QueryDomain {
     }
 }
 
-pub fn yabai_message(msgs: &[&str]) -> Result<String> {
-    let mut command = String::new();
+pub fn yabai_message<T: AsRef<OsStr>>(msgs: &[T]) -> Result<String> {
+    let mut command = Command::new("yabai");
+    command.arg("-m");
     for msg in msgs.iter() {
-        command.push_str(msg);
-        command.push('\0');
+        command.arg(msg);
     }
-    command.push('\0');
-
-    let user = std::env::var("USER")?;
-    let path = PathBuf::from(format!("/tmp/yabai_{}.socket", user));
 
     let start = Instant::now();
-    let mut stream = UnixStream::connect(path)?;
-    stream.set_read_timeout(Some(Duration::new(1, 0)))?;
-    stream.set_write_timeout(Some(Duration::new(1, 0)))?;
-
-    stream.write_all(command.as_bytes())?;
-
-    let sleep = Duration::from_millis(1);
-    thread::sleep(sleep);
-
-    let mut buffer = Vec::new();
-    let read = stream.read_to_end(&mut buffer)?;
+    let output = command.output()?;
     let duration = start.elapsed();
-    eprintln!("{:?} {:?}", msgs, duration);
+    eprintln!("{:?} {:?}", command, duration);
 
-    if read == 0 {
-        return Ok("".to_string());
+    if !output.status.success() {
+        let err = String::from_utf8(output.stderr)?;
+        bail!("Failed to execute yabai: {}", err);
     }
-    if buffer[0] == YABAI_FAILURE_BYTE {
-        bail!("{}", String::from_utf8(buffer[1..].to_vec())?);
-    }
-    let s = String::from_utf8(buffer)?;
-
+    let s = String::from_utf8(output.stdout)?;
     Ok(s)
 }
 
