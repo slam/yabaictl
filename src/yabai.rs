@@ -1,14 +1,17 @@
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
 use std::convert::TryInto;
-use std::ffi::OsStr;
-use std::process::Command;
-use std::time::Instant;
+use std::io::prelude::*;
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
+use std::thread;
+use std::time::{Duration, Instant};
 use structopt::clap::arg_enum;
 
 use crate::states::{self, Display, Space, Window, YabaiStates, YabaictlStates};
 
 pub const NUM_SPACES: u32 = 10;
+const YABAI_FAILURE_BYTE: u8 = 0x07;
 
 arg_enum! {
     #[derive(Debug)]
@@ -45,23 +48,40 @@ impl QueryDomain {
     }
 }
 
-pub fn yabai_message<T: AsRef<OsStr>>(msgs: &[T]) -> Result<String> {
-    let mut command = Command::new("yabai");
-    command.arg("-m");
+pub fn yabai_message(msgs: &[&str]) -> Result<String> {
+    let mut command = String::new();
     for msg in msgs.iter() {
-        command.arg(msg);
+        command.push_str(msg);
+        command.push('\0');
     }
+    command.push('\0');
+
+    let user = std::env::var("USER")?;
+    let path = PathBuf::from(format!("/tmp/yabai_{}.socket", user));
 
     let start = Instant::now();
-    let output = command.output()?;
-    let duration = start.elapsed();
-    eprintln!("{:?} {:?}", command, duration);
+    let mut stream = UnixStream::connect(path)?;
+    stream.set_read_timeout(Some(Duration::new(1, 0)))?;
+    stream.set_write_timeout(Some(Duration::new(1, 0)))?;
 
-    if !output.status.success() {
-        let err = String::from_utf8(output.stderr)?;
-        bail!("Failed to execute yabai: {}", err);
+    stream.write_all(command.as_bytes())?;
+
+    let sleep = Duration::from_millis(1);
+    thread::sleep(sleep);
+
+    let mut buffer = Vec::new();
+    let read = stream.read_to_end(&mut buffer)?;
+    let duration = start.elapsed();
+    eprintln!("{:?} {:?}", msgs, duration);
+
+    if read == 0 {
+        return Ok("".to_string());
     }
-    let s = String::from_utf8(output.stdout)?;
+    if buffer[0] == YABAI_FAILURE_BYTE {
+        bail!("{}", String::from_utf8(buffer[1..].to_vec())?);
+    }
+    let s = String::from_utf8(buffer)?;
+
     Ok(s)
 }
 
@@ -69,10 +89,22 @@ pub fn yabai_query<T>(param: QueryDomain) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    let raw = yabai_message(&["query", param.as_str()])?;
-    let json: T = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to deserialize JSON: {}", raw))?;
-    Ok(json)
+    let command = &["query", param.as_str()];
+    loop {
+        let raw = yabai_message(command)?;
+        if raw == "" {
+            // Retry the query if yabai returns an empty string.
+            //
+            // We might be sending commands too fast to yabai. It
+            // might not be able to handle the rapid fire series
+            // of commands straight into the unix socket.
+            eprintln!("{:?} returned an empty string, retrying", command);
+            continue;
+        }
+        let json: T = serde_json::from_str(&raw)
+            .with_context(|| format!("Failed to deserialize JSON: {}", raw))?;
+        return Ok(json);
+    }
 }
 
 pub fn query() -> Result<YabaiStates> {
