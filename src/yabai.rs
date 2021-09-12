@@ -161,7 +161,15 @@ fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
 }
 
 fn focus_space_by_label(label_index: u32) -> Result<()> {
-    yabai_message(&["space", "--focus", &format!("s{}", label_index)])?;
+    let r = yabai_message(&["space", "--focus", &format!("s{}", label_index)]);
+    match r {
+        Err(e) => {
+            if e.to_string() != "cannot focus an already focused space.\n" {
+                return Err(e);
+            }
+        }
+        Ok(_) => {}
+    }
     Ok(())
 }
 
@@ -299,7 +307,7 @@ pub fn restore_spaces() -> Result<()> {
 pub fn focus_space(space: SpaceArg) -> Result<()> {
     let states = query()?;
     let focused_space = states.focused_space().expect("No focused space found");
-    let label_index = focused_space.label_index().expect("Invalid space label");
+    let focused_label_index = focused_space.label_index().expect("Invalid space label");
     let label_index = match space {
         SpaceArg::Recent => {
             let ctl = states::load_yabaictl()?;
@@ -313,7 +321,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             ctl.recent
         }
         SpaceArg::Next => {
-            let index = label_index + states.num_displays();
+            let index = focused_label_index + states.num_displays();
             if index > NUM_SPACES {
                 index % NUM_SPACES
             } else {
@@ -321,10 +329,10 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             }
         }
         SpaceArg::Prev => {
-            if label_index <= states.num_displays() {
-                states.num_spaces() - 1 /* reserved */ - (states.num_displays() - label_index)
+            if focused_label_index <= states.num_displays() {
+                states.num_spaces() - 1 /* reserved */ - (states.num_displays() - focused_label_index)
             } else {
-                label_index - states.num_displays()
+                focused_label_index - states.num_displays()
             }
         }
         SpaceArg::Space(number) => number,
@@ -335,10 +343,12 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
         }
         2 => {
             // This is to bring both desktops to focus
-            if label_index % 2 == 0 {
-                focus_space_by_label(label_index - 1)?;
-            } else {
-                focus_space_by_label(label_index + 1)?;
+            let neighbor_label_index = match label_index % 2 {
+                0 => label_index - 1,
+                _ => label_index + 1,
+            };
+            if focused_label_index != neighbor_label_index {
+                focus_space_by_label(neighbor_label_index)?;
             }
             focus_space_by_label(label_index)?;
         }
