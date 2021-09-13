@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::process::Command;
-use std::time::Instant;
+use std::{thread, time};
 use structopt::clap::arg_enum;
 
 use crate::states::{self, Display, Space, Window, YabaiStates, YabaictlStates};
@@ -80,7 +80,7 @@ pub fn yabai_message<T: AsRef<OsStr>>(msgs: &[T]) -> Result<String> {
         command.arg(msg);
     }
 
-    let start = Instant::now();
+    let start = time::Instant::now();
     let output = command.output()?;
     let duration = start.elapsed();
     eprintln!("{:?} {:?}", command, duration);
@@ -156,8 +156,18 @@ fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
     Ok(())
 }
 
+fn focus(space: &Space) -> Result<()> {
+    focus_space_arg(&space.index.to_string())?;
+    Ok(())
+}
+
 fn focus_space_by_label(label_index: u32) -> Result<()> {
-    let r = yabai_message(&["space", "--focus", &format!("s{}", label_index)]);
+    focus_space_arg(&format!("s{}", label_index))?;
+    Ok(())
+}
+
+fn focus_space_arg(arg: &str) -> Result<()> {
+    let r = yabai_message(&["space", "--focus", arg]);
     match r {
         Err(e) => {
             if !e
@@ -201,6 +211,20 @@ fn neighbor_space(states: &YabaiStates, direction: WindowArg) -> Option<&Space> 
 }
 
 fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
+    // Cycle through all the spaces and focus each one with a short delay.
+    // This gives yabai enough time to pick up the most up-to-date states.
+    // This is esp. important when yabai has just been reloaded, in which
+    // case the windows array in every space is empty (except for the one
+    // already in focus).
+    let focused_space = states.focused_space().expect("No focused space");
+    for space in states.spaces.iter() {
+        focus(space)?;
+        let sleep = time::Duration::from_millis(100);
+        thread::sleep(sleep);
+    }
+    focus(focused_space)?;
+
+    let states = query()?;
     // Add one for the unused Desktop 1. See comments in ensure_labels() for
     // more details.
     let target = NUM_SPACES + 1;
