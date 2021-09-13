@@ -182,6 +182,28 @@ fn focus_space_arg(arg: &str) -> Result<()> {
     Ok(())
 }
 
+fn move_space_to_display(space_index: u32, display_index: u32) -> Result<()> {
+    let r = yabai_message(&[
+        "space",
+        &space_index.to_string(),
+        "--display",
+        &display_index.to_string(),
+    ]);
+
+    match r {
+        Err(e) => {
+            if !e
+                .to_string()
+                .contains(&"acting space is already located on the given display.")
+            {
+                return Err(e);
+            }
+        }
+        Ok(_) => {}
+    }
+    Ok(())
+}
+
 fn neighbor_space(states: &YabaiStates, direction: WindowArg) -> Option<&Space> {
     let focused_space = states.focused_space().expect("No focused space found");
     let label_index = focused_space.label_index().expect("Invalid space label");
@@ -210,6 +232,29 @@ fn neighbor_space(states: &YabaiStates, direction: WindowArg) -> Option<&Space> 
     states.find_space_by_label_index(next_label_index)
 }
 
+fn even_spaces(states: &YabaiStates) -> Result<()> {
+    // Evenly split the spaces among the monitors
+    match states.num_displays() {
+        1 => {}
+        2 => {
+            for i in 1..=NUM_SPACES {
+                if i <= NUM_SPACES / 2 {
+                    move_space_to_display(i + 1, 1)?
+                } else {
+                    move_space_to_display(i + 1, 2)?
+                }
+            }
+        }
+        _ => {
+            bail!(
+                "Don't know how to handle {} monitors",
+                states.num_displays()
+            );
+        }
+    }
+    Ok(())
+}
+
 fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     // Cycle through all the spaces and focus each one with a short delay.
     // This gives yabai enough time to pick up the most up-to-date states.
@@ -229,6 +274,9 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     // more details.
     let target = NUM_SPACES + 1;
 
+    // Evenly distribute the spaces among displays to handle the edge
+    // case where only one space is left to destroy (and that would fail).
+    even_spaces(&states)?;
     if states.num_spaces() < target {
         for _i in states.num_spaces()..NUM_SPACES + 1 {
             yabai_message(&["space", "--create"])?;
@@ -238,6 +286,9 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
             yabai_message(&["space", &(target + 1).to_string(), "--destroy"])?;
         }
     }
+    // Now evenly distribute the spaces again after the creation/destruction.
+    even_spaces(&states)?;
+
     Ok(query()?)
 }
 
