@@ -136,7 +136,23 @@ fn label_space(space_index: u32, label: &str) -> Result<()> {
 }
 
 fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
-    yabai_message(&["window", &window_id.to_string(), "--space", space])?;
+    if space == "" {
+        eprintln!("Not moving {} to an unlabeled space", window_id);
+        return Ok(());
+    }
+    let r = yabai_message(&["window", &window_id.to_string(), "--space", space]);
+    match r {
+        Err(e) => {
+            if !e
+                .to_string()
+                .contains(&"could not locate the window to act on!")
+            {
+                return Err(e);
+            }
+            eprintln!("Not moving {}. It no longer exists", window_id);
+        }
+        Ok(_) => {}
+    }
     Ok(())
 }
 
@@ -144,7 +160,10 @@ fn focus_space_by_label(label_index: u32) -> Result<()> {
     let r = yabai_message(&["space", "--focus", &format!("s{}", label_index)]);
     match r {
         Err(e) => {
-            if e.to_string() != "cannot focus an already focused space.\n" {
+            if !e
+                .to_string()
+                .contains(&"cannot focus an already focused space.")
+            {
                 return Err(e);
             }
         }
@@ -362,12 +381,12 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
             }
             let e_str = e.to_string();
             let expected1 = format!(
-                "could not locate a {}ward managed window.\n",
+                "could not locate a {}ward managed window.",
                 direction.as_str()
             );
-            // This is the error is the space has no windows
-            let expected2 = "could not locate the selected window.\n";
-            if e_str != expected1 && e_str != expected2 {
+            // This is the error when the space has no windows
+            let expected2 = "could not locate the selected window.";
+            if !e_str.contains(&expected1) && !e_str.contains(&expected2) {
                 return Err(e);
             }
 
