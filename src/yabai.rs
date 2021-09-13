@@ -303,8 +303,21 @@ pub fn restore_spaces() -> Result<()> {
     Ok(())
 }
 
+fn restore_if_necessary(states: YabaiStates) -> Result<YabaiStates> {
+    if states.find_space_by_label("").is_none() {
+        return Ok(states);
+    }
+    eprintln!("Restoring spaces");
+    let states = ensure_spaces(&states)?;
+    let states = ensure_labels(&states)?;
+    let states = reorganize_spaces(&states)?;
+    Ok(states)
+}
+
 pub fn focus_space(space: SpaceArg) -> Result<()> {
     let states = query()?;
+    let states = restore_if_necessary(states)?;
+
     let focused_space = states.focused_space().expect("No focused space found");
     let focused_label_index = focused_space.label_index().expect("Invalid space label");
     let label_index = match space {
@@ -369,6 +382,9 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
 }
 
 pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
+    let states = query()?;
+    let states = restore_if_necessary(states)?;
+
     let r = yabai_message(&["window", op.as_str(), direction.as_str()]);
     match r {
         Err(e) => {
@@ -390,7 +406,6 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
                 return Err(e);
             }
 
-            let states = query()?;
             match states.num_displays() {
                 1 => {
                     let space = states.focused_space().expect("No focused space found");
