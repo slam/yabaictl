@@ -371,11 +371,20 @@ fn reorganize_spaces(states: &YabaiStates) -> Result<YabaiStates> {
 
 pub fn restore_spaces() -> Result<()> {
     let states = query()?;
+    let states = restore_spaces_core(states)?;
+    states::save_yabai(&states)?;
+    Ok(())
+}
+
+fn restore_spaces_core(states: YabaiStates) -> Result<YabaiStates> {
     let states = ensure_spaces(&states)?;
     let states = ensure_labels(&states)?;
     let states = reorganize_spaces(&states)?;
-    states::save_yabai(&states)?;
-    Ok(())
+    // Probably a yabai bug somehwere. When this is called by yabai on a signal
+    // of the display_added event, sending a window to a different space
+    // sometimes doesn't take effect. So, here we run it twice.
+    let states = reorganize_spaces(&states)?;
+    Ok(states)
 }
 
 fn restore_if_necessary(states: YabaiStates) -> Result<YabaiStates> {
@@ -383,9 +392,7 @@ fn restore_if_necessary(states: YabaiStates) -> Result<YabaiStates> {
         return Ok(states);
     }
     eprintln!("Restoring spaces");
-    let states = ensure_spaces(&states)?;
-    let states = ensure_labels(&states)?;
-    let states = reorganize_spaces(&states)?;
+    let states = restore_spaces_core(states)?;
     Ok(states)
 }
 
