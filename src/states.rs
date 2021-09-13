@@ -60,7 +60,7 @@ pub struct Space {
     display: u32,
     pub windows: Vec<u32>,
     r#type: String,
-    visible: u32,
+    pub visible: u32,
     pub focused: u32,
     #[serde(rename = "native-fullscreen")]
     native_fullscreen: u32,

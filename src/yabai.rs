@@ -383,8 +383,15 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
                 0 => label_index - 1,
                 _ => label_index + 1,
             };
-            if focused_label_index != neighbor_label_index {
-                focus_space_by_label(neighbor_label_index)?;
+            let neighbor_space = states.find_space_by_label_index(neighbor_label_index);
+            match neighbor_space {
+                None => {}
+                Some(neighbor_space) => {
+                    // Skip bringing the other screen to focus if it is already in focus or visible
+                    if focused_label_index != neighbor_label_index && neighbor_space.visible != 1 {
+                        focus_space_by_label(neighbor_label_index)?;
+                    }
+                }
             }
             focus_space_by_label(label_index)?;
         }
