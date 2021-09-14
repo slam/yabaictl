@@ -518,16 +518,31 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
 
                     match op {
                         WindowOp::Focus => {
-                            let space = match neighbor_space.windows.len() {
-                                0 => states.focused_space().expect("No focused space found"),
-                                _ => neighbor_space,
-                            };
                             let next_window = match direction {
-                                WindowArg::East => space.first_window,
-                                WindowArg::West => space.last_window,
+                                WindowArg::East => neighbor_space.first_window,
+                                WindowArg::West => neighbor_space.last_window,
                                 _ => {
                                     return Err(e);
                                 }
+                            };
+                            let next_window = if next_window == 0
+                                // Sometimes yabai's first-window and
+                                // last-window states get stale.  Verify that
+                                // the window is still in the windows array for
+                                // the space. If it is not, most likely the
+                                // space is empty with a hidden window or two.
+                                || neighbor_space.find_window_id(&next_window).is_none()
+                            {
+                                let space = states.focused_space().expect("No focused space found");
+                                match direction {
+                                    WindowArg::East => space.first_window,
+                                    WindowArg::West => space.last_window,
+                                    _ => {
+                                        return Err(e);
+                                    }
+                                }
+                            } else {
+                                next_window
                             };
                             yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
                         }
