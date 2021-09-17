@@ -462,7 +462,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
     }
 
     let ctl = &YabaictlStates {
-        recent: label_index,
+        recent: focused_label_index,
     };
     states::save_yabaictl(ctl)?;
     let states = query()?;
