@@ -388,7 +388,7 @@ fn restore_spaces_core(states: YabaiStates) -> Result<YabaiStates> {
 }
 
 fn restore_if_necessary(states: YabaiStates) -> Result<YabaiStates> {
-    if states.find_space_by_label("").is_none() {
+    if states.find_unlabeled_space().is_none() {
         return Ok(states);
     }
     eprintln!("Restoring spaces");

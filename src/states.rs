@@ -38,6 +38,13 @@ impl YabaiStates {
         self.spaces.iter().find(|&space| space.label == label)
     }
 
+    pub fn find_unlabeled_space(&self) -> Option<&Space> {
+        self.spaces
+            .iter()
+            // An app going fullscreen gets its own space. MacOS is... weird.
+            .find(|&space| space.label == "" && space.native_fullscreen == 0)
+    }
+
     pub fn find_space_by_label_index(&self, label_index: u32) -> Option<&Space> {
         let label = format!("s{}", label_index);
         self.spaces.iter().find(|&space| space.label == label)
