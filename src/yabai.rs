@@ -1,14 +1,17 @@
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
 use std::convert::TryInto;
-use std::ffi::OsStr;
-use std::process::Command;
-use std::{thread, time};
+use std::io::prelude::*;
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
+use std::thread;
+use std::time::{Duration, Instant};
 use structopt::clap::arg_enum;
 
 use crate::states::{self, Display, Space, Window, YabaiStates, YabaictlStates};
 
 pub const NUM_SPACES: u32 = 10;
+const YABAI_FAILURE_BYTE: u8 = 0x07;
 
 arg_enum! {
     #[derive(Debug, Copy, Clone, PartialEq)]
@@ -73,23 +76,37 @@ impl QueryDomain {
     }
 }
 
-pub fn yabai_message<T: AsRef<OsStr>>(msgs: &[T]) -> Result<String> {
-    let mut command = Command::new("yabai");
-    command.arg("-m");
+pub fn yabai_message(msgs: &[&str]) -> Result<String> {
+    let mut command = String::new();
     for msg in msgs.iter() {
-        command.arg(msg);
+        command.push_str(msg);
+        command.push('\0');
     }
+    command.push('\0');
 
-    let start = time::Instant::now();
-    let output = command.output()?;
+    let user = std::env::var("USER")?;
+    let path = PathBuf::from(format!("/tmp/yabai_{}.socket", user));
+
+    let start = Instant::now();
+    let mut stream = UnixStream::connect(path)?;
+    stream.set_read_timeout(Some(Duration::new(1, 0)))?;
+    stream.set_write_timeout(Some(Duration::new(1, 0)))?;
+
+    stream.write_all(command.as_bytes())?;
+
+    let mut buffer = Vec::new();
+    let read = stream.read_to_end(&mut buffer)?;
     let duration = start.elapsed();
-    eprintln!("{:?} {:?}", command, duration);
+    eprintln!("{:?} {:?}", msgs, duration);
 
-    if !output.status.success() {
-        let err = String::from_utf8(output.stderr)?;
-        bail!("Failed to execute yabai: {}", err);
+    if read == 0 {
+        return Ok("".to_string());
     }
-    let s = String::from_utf8(output.stdout)?;
+    if buffer[0] == YABAI_FAILURE_BYTE {
+        bail!("{}", String::from_utf8(buffer[1..].to_vec())?);
+    }
+    let s = String::from_utf8(buffer)?;
+
     Ok(s)
 }
 
@@ -264,7 +281,7 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     let focused_space = states.focused_space().expect("No focused space");
     for space in states.spaces.iter() {
         focus(space)?;
-        let sleep = time::Duration::from_millis(100);
+        let sleep = Duration::from_millis(100);
         thread::sleep(sleep);
     }
     focus(focused_space)?;
