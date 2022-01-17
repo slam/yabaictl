@@ -42,7 +42,7 @@ impl YabaiStates {
         self.spaces
             .iter()
             // An app going fullscreen gets its own space. MacOS is... weird.
-            .find(|&space| space.label == "" && space.native_fullscreen == 0)
+            .find(|&space| space.label == "" && space.is_native_fullscreen)
     }
 
     pub fn find_space_by_label_index(&self, label_index: u32) -> Option<&Space> {
