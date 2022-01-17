@@ -31,7 +31,7 @@ impl YabaiStates {
     }
 
     pub fn focused_space(&self) -> Option<&Space> {
-        self.spaces.iter().find(|space| space.focused == 1)
+        self.spaces.iter().find(|space| space.has_focus)
     }
 
     pub fn find_space_by_label(&self, label: &str) -> Option<&Space> {
@@ -62,19 +62,22 @@ impl YabaiStates {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Space {
     id: u32,
-    pub label: String,
+    uuid: String,
     pub index: u32,
+    pub label: String,
+    r#type: String,
     display: u32,
     pub windows: Vec<u32>,
-    r#type: String,
-    pub visible: u32,
-    pub focused: u32,
-    #[serde(rename = "native-fullscreen")]
-    native_fullscreen: u32,
     #[serde(rename = "first-window")]
     pub first_window: u32,
     #[serde(rename = "last-window")]
     pub last_window: u32,
+    #[serde(rename = "has-focus")]
+    pub has_focus: bool,
+    #[serde(rename = "is-visible")]
+    pub is_visible: bool,
+    #[serde(rename = "is-native-fullscreen")]
+    is_native_fullscreen: bool,
 }
 
 impl Space {
@@ -99,8 +102,8 @@ pub struct Display {
     id: u32,
     uuid: String,
     index: u32,
-    spaces: Vec<u32>,
     frame: Frame,
+    spaces: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -118,30 +121,47 @@ pub struct Window {
     app: String,
     title: String,
     frame: Frame,
-    level: u32,
     role: String,
-    movable: u32,
-    resizable: u32,
+    subrole: String,
     display: u32,
     space: u32,
-    visible: u32,
-    focused: u32,
-    split: String,
-    floating: u32,
-    sticky: u32,
-    minimized: u32,
-    topmost: u32,
+    level: u32,
     opacity: f32,
-    shadow: u32,
-    border: u32,
+    #[serde(rename = "split-type")]
+    split_type: String,
     #[serde(rename = "stack-index")]
     stack_index: u32,
-    #[serde(rename = "zoom-parent")]
-    zoom_parent: u32,
-    #[serde(rename = "zoom-fullscreen")]
-    zoom_fullscreen: u32,
-    #[serde(rename = "native-fullscreen")]
-    native_fullscreen: u32,
+
+    #[serde(rename = "can-move")]
+    can_move: bool,
+    #[serde(rename = "can-resize")]
+    can_resize: bool,
+    #[serde(rename = "has-focus")]
+    has_focus: bool,
+    #[serde(rename = "has-shadow")]
+    has_shadow: bool,
+    #[serde(rename = "has-border")]
+    has_border: bool,
+    #[serde(rename = "has-parent-zoom")]
+    has_parent_zoom: bool,
+    #[serde(rename = "has-fullscreen-zoom")]
+    has_fullscreen_zoom: bool,
+    #[serde(rename = "is-native-fullscreen")]
+    is_native_fullscreen: bool,
+    #[serde(rename = "is-visible")]
+    is_visible: bool,
+    #[serde(rename = "is-minimized")]
+    is_minimized: bool,
+    #[serde(rename = "is-hidden")]
+    is_hidden: bool,
+    #[serde(rename = "is-floating")]
+    is_floating: bool,
+    #[serde(rename = "is-sticky")]
+    is_sticky: bool,
+    #[serde(rename = "is-topmost")]
+    is_topmost: bool,
+    #[serde(rename = "is-grabbed")]
+    is_grabbed: bool,
 }
 
 fn save<T>(states: &T, filename: &str) -> Result<()>
