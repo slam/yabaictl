@@ -87,27 +87,48 @@ pub fn yabai_message(msgs: &[&str]) -> Result<String> {
     let user = std::env::var("USER")?;
     let path = PathBuf::from(format!("/tmp/yabai_{}.socket", user));
 
-    let start = Instant::now();
-    let mut stream = UnixStream::connect(path)?;
-    stream.set_read_timeout(Some(Duration::new(1, 0)))?;
-    stream.set_write_timeout(Some(Duration::new(1, 0)))?;
+    loop {
+        let start = Instant::now();
+        let mut stream = UnixStream::connect(path.as_path())?;
 
-    stream.write_all(command.as_bytes())?;
+        // Adjust timeouts to 10s. When a display is added or removed, yabai
+        // could take a few seconds to return.
+        stream.set_read_timeout(Some(Duration::new(10, 0)))?;
+        stream.set_write_timeout(Some(Duration::new(10, 0)))?;
 
-    let mut buffer = Vec::new();
-    let read = stream.read_to_end(&mut buffer)?;
-    let duration = start.elapsed();
-    eprintln!("{:?} {:?}", msgs, duration);
+        stream.write_all(command.as_bytes())?;
 
-    if read == 0 {
-        return Ok("".to_string());
+        let mut buffer = Vec::new();
+        let read = match stream.read_to_end(&mut buffer) {
+            Ok(read) => read,
+            Err(e) => {
+                let duration = start.elapsed();
+                match e.kind() {
+                    std::io::ErrorKind::WouldBlock => {
+                        // Retry on this error:
+                        //
+                        //   Error: Resource temporarily unavailable (os error 35)
+                        eprintln!("{:?} {:?} got {:?}, retrying", msgs, duration, e);
+                        continue;
+                    }
+                    _ => {
+                        bail!("{:?} {:?} {:?}", msgs, duration, e);
+                    }
+                }
+            }
+        };
+        let duration = start.elapsed();
+        eprintln!("{:?} {:?}", msgs, duration);
+
+        if read == 0 {
+            return Ok("".to_string());
+        }
+        if buffer[0] == YABAI_FAILURE_BYTE {
+            bail!("{}", String::from_utf8(buffer[1..].to_vec())?);
+        }
+        let s = String::from_utf8(buffer)?;
+        return Ok(s);
     }
-    if buffer[0] == YABAI_FAILURE_BYTE {
-        bail!("{}", String::from_utf8(buffer[1..].to_vec())?);
-    }
-    let s = String::from_utf8(buffer)?;
-
-    Ok(s)
 }
 
 pub fn yabai_query<T>(param: QueryDomain) -> Result<T>
