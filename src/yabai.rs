@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use byteorder::{WriteBytesExt, LittleEndian};
 use serde::de::DeserializeOwned;
 use std::convert::TryInto;
 use std::io::prelude::*;
@@ -96,6 +97,7 @@ pub fn yabai_message(msgs: &[&str]) -> Result<String> {
         stream.set_read_timeout(Some(Duration::new(10, 0)))?;
         stream.set_write_timeout(Some(Duration::new(10, 0)))?;
 
+        stream.write_u32::<LittleEndian>(command.len().try_into().unwrap())?;
         stream.write_all(command.as_bytes())?;
 
         let mut buffer = Vec::new();
