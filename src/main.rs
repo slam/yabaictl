@@ -55,6 +55,7 @@ fn parse_space_arg(src: &str) -> Result<SpaceArg> {
         "next" => return Ok(SpaceArg::Next),
         "prev" => return Ok(SpaceArg::Prev),
         "recent" => return Ok(SpaceArg::Recent),
+        "extra" => return Ok(SpaceArg::Extra),
         _ => {
             let space = u32::from_str_radix(src, 10)?;
             if space == 0 || space > yabai::NUM_SPACES {

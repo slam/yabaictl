@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use byteorder::{WriteBytesExt, LittleEndian};
+use byteorder::{LittleEndian, WriteBytesExt};
 use serde::de::DeserializeOwned;
 use std::convert::TryInto;
 use std::io::prelude::*;
@@ -57,6 +57,7 @@ pub enum SpaceArg {
     Next,
     Prev,
     Recent,
+    Extra,
     Space(u32),
 }
 
@@ -186,6 +187,9 @@ fn move_window_to_space(window_id: &u32, space: &str) -> Result<()> {
             if !e
                 .to_string()
                 .contains(&"could not locate the window to act on!")
+                && !e
+                    .to_string()
+                    .contains(&"is not a valid option for SPACE_SEL")
             {
                 return Err(e);
             }
@@ -251,14 +255,14 @@ fn neighbor_space(states: &YabaiStates, direction: WindowArg) -> Option<&Space> 
     // My main window is on the right
     let next_label_index = match direction {
         WindowArg::East => {
-            if label_index % states.num_displays() == 0 {
+            if label_index % 2 == 0 {
                 label_index - 1
             } else {
                 label_index + 1
             }
         }
         WindowArg::West => {
-            if label_index % states.num_displays() == 0 {
+            if label_index % 2 == 0 {
                 label_index - 1
             } else {
                 label_index + 1
@@ -276,13 +280,16 @@ fn even_spaces(states: &YabaiStates) -> Result<()> {
     // Evenly split the spaces among the monitors
     match states.num_displays() {
         1 => {}
-        2 => {
+        2 | 3 => {
             for i in 1..=NUM_SPACES {
                 if i <= NUM_SPACES / 2 {
                     move_space_to_display(i + 1, 1)?
                 } else {
                     move_space_to_display(i + 1, 2)?
                 }
+            }
+            if states.num_displays() > 2 {
+                move_space_to_display(NUM_SPACES + 2, 3)?
             }
         }
         _ => {
@@ -312,7 +319,9 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     let states = query()?;
     // Add one for the unused Desktop 1. See comments in ensure_labels() for
     // more details.
-    let target = NUM_SPACES + 1;
+    //
+    // Display 3 and beyond have one desktop each.
+    let target = NUM_SPACES + 1 + (states.num_spaces() - 2);
 
     // Evenly distribute the spaces among displays to handle the edge
     // case where only one space is left to destroy (and that would fail).
@@ -348,7 +357,7 @@ fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
                 label_space((i + 1).try_into()?, &format!("s{}", i))?;
             }
         }
-        2 => {
+        2 | 3 => {
             // This is the arrangement for two monitors with the one on the
             // right as primary:
             //
@@ -370,11 +379,13 @@ fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
             for i in 1..states.num_spaces() {
                 if i <= NUM_SPACES / 2 {
                     label_space((i + 1).try_into()?, &format!("s{}", i * 2))?;
-                } else {
+                } else if i <= NUM_SPACES {
                     label_space(
                         (i + 1).try_into()?,
                         &format!("s{}", (i - NUM_SPACES / 2) * 2 - 1),
                     )?;
+                } else {
+                    label_space((i + 1).try_into()?, &format!("s{}", NUM_SPACES + 1))?;
                 }
             }
         }
@@ -442,6 +453,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
 
     let focused_space = states.focused_space().expect("No focused space found");
     let focused_label_index = focused_space.label_index().expect("Invalid space label");
+    let display_count = if states.num_displays() >= 2 { 2 } else { 1 };
     let label_index = match space {
         SpaceArg::Recent => {
             let ctl = states::load_yabaictl()?;
@@ -455,7 +467,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             ctl.recent
         }
         SpaceArg::Next => {
-            let index = focused_label_index + states.num_displays();
+            let index = focused_label_index + display_count;
             if index > NUM_SPACES {
                 index % NUM_SPACES
             } else {
@@ -463,19 +475,24 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
             }
         }
         SpaceArg::Prev => {
-            if focused_label_index <= states.num_displays() {
-                states.num_spaces() - 1 /* reserved */ - (states.num_displays() - focused_label_index)
+            if focused_label_index <= display_count {
+                let extra_monitors = if states.num_displays() > 2 {states.num_displays() - 2} else { 0 };
+                states.num_spaces() - 1 /* reserved */ - extra_monitors - (display_count - focused_label_index)
             } else {
-                focused_label_index - states.num_displays()
+                focused_label_index - display_count
             }
+        }
+        SpaceArg::Extra => {
+            11
         }
         SpaceArg::Space(number) => number,
     };
+    eprintln!("focus_space: label_index={}", label_index);
     match states.num_displays() {
         1 => {
             focus_space_by_label(label_index)?;
         }
-        2 => {
+        2 | 3 => {
             // This is to bring both desktops to focus
             let neighbor_label_index = match label_index % 2 {
                 0 => label_index - 1,
@@ -547,7 +564,7 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
                     };
                     yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
                 }
-                2 => {
+                2 | 3 => {
                     let neighbor_space = neighbor_space(&states, direction);
                     let neighbor_space = match neighbor_space {
                         None => {
@@ -584,6 +601,7 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
                             } else {
                                 next_window
                             };
+                            eprintln!("next_window={}", next_window);
                             yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
                         }
                         WindowOp::Swap | WindowOp::Warp => {
