@@ -321,7 +321,7 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     // more details.
     //
     // Display 3 and beyond have one desktop each.
-    let target = NUM_SPACES + 1 + (states.num_spaces() - 2);
+    let target = NUM_SPACES + 1 + (states.num_displays() - 2);
 
     // Evenly distribute the spaces among displays to handle the edge
     // case where only one space is left to destroy (and that would fail).
