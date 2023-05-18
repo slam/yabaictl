@@ -303,16 +303,23 @@ fn even_spaces(states: &YabaiStates) -> Result<()> {
 }
 
 fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
+    let layout = if states.num_displays() > 1 {
+        "bsp"
+    } else {
+        "stack"
+    };
+
     // Cycle through all the spaces and focus each one with a short delay.
     // This gives yabai enough time to pick up the most up-to-date states.
     // This is esp. important when yabai has just been reloaded, in which
     // case the windows array in every space is empty (except for the one
     // already in focus).
     let focused_space = states.focused_space().expect("No focused space");
+    let sleep = Duration::from_millis(250);
     for space in states.spaces.iter() {
         focus(space)?;
-        let sleep = Duration::from_millis(100);
         thread::sleep(sleep);
+        yabai_message(&["space", "--layout", layout])?;
     }
     focus(focused_space)?;
 
@@ -476,15 +483,17 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
         }
         SpaceArg::Prev => {
             if focused_label_index <= display_count {
-                let extra_monitors = if states.num_displays() > 2 {states.num_displays() - 2} else { 0 };
+                let extra_monitors = if states.num_displays() > 2 {
+                    states.num_displays() - 2
+                } else {
+                    0
+                };
                 states.num_spaces() - 1 /* reserved */ - extra_monitors - (display_count - focused_label_index)
             } else {
                 focused_label_index - display_count
             }
         }
-        SpaceArg::Extra => {
-            11
-        }
+        SpaceArg::Extra => 11,
         SpaceArg::Space(number) => number,
     };
     eprintln!("focus_space: label_index={}", label_index);
