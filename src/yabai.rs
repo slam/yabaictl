@@ -303,12 +303,6 @@ fn even_spaces(states: &YabaiStates) -> Result<()> {
 }
 
 fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
-    let layout = if states.num_displays() > 1 {
-        "bsp"
-    } else {
-        "stack"
-    };
-
     // Cycle through all the spaces and focus each one with a short delay.
     // This gives yabai enough time to pick up the most up-to-date states.
     // This is esp. important when yabai has just been reloaded, in which
@@ -319,7 +313,7 @@ fn ensure_spaces(states: &YabaiStates) -> Result<YabaiStates> {
     for space in states.spaces.iter() {
         focus(space)?;
         thread::sleep(sleep);
-        yabai_message(&["space", "--layout", layout])?;
+        yabai_message(&["space", "--layout", "bsp"])?;
     }
     focus(focused_space)?;
 
