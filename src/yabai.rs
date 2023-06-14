@@ -458,7 +458,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
     let states = restore_if_necessary(states)?;
 
     let focused_space = states.focused_space().expect("No focused space found");
-    let focused_label_index = focused_space.label_index().expect("Invalid space label");
+    let focused_label_index = focused_space.label_index().unwrap_or(0);
     let display_count = if states.num_displays() >= 2 { 2 } else { 1 };
     let label_index = match space {
         SpaceArg::Recent => {
