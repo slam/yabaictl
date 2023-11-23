@@ -57,7 +57,8 @@ pub enum SpaceArg {
     Next,
     Prev,
     Recent,
-    Extra,
+    Third,
+    Fourth,
     Space(u32),
 }
 
@@ -280,7 +281,7 @@ fn even_spaces(states: &YabaiStates) -> Result<()> {
     // Evenly split the spaces among the monitors
     match states.num_displays() {
         1 => {}
-        2 | 3 => {
+        _ => {
             for i in 1..=NUM_SPACES {
                 if i <= NUM_SPACES / 2 {
                     move_space_to_display(i + 1, 1)?
@@ -288,15 +289,9 @@ fn even_spaces(states: &YabaiStates) -> Result<()> {
                     move_space_to_display(i + 1, 2)?
                 }
             }
-            if states.num_displays() > 2 {
-                move_space_to_display(NUM_SPACES + 2, 3)?
+            for i in 3..=states.num_displays() {
+                move_space_to_display(NUM_SPACES + i - 1, i)?
             }
-        }
-        _ => {
-            bail!(
-                "Don't know how to handle {} monitors",
-                states.num_displays()
-            );
         }
     }
     Ok(())
@@ -363,7 +358,7 @@ fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
                 label_space((i + 1).try_into()?, &format!("s{}", i))?;
             }
         }
-        2 | 3 => {
+        _ => {
             // This is the arrangement for two monitors with the one on the
             // right as primary:
             //
@@ -391,15 +386,9 @@ fn ensure_labels(states: &YabaiStates) -> Result<YabaiStates> {
                         &format!("s{}", (i - NUM_SPACES / 2) * 2 - 1),
                     )?;
                 } else {
-                    label_space((i + 1).try_into()?, &format!("s{}", NUM_SPACES + 1))?;
+                    label_space((i + 1).try_into()?, &format!("s{}", NUM_SPACES + i - NUM_SPACES))?;
                 }
             }
-        }
-        _ => {
-            bail!(
-                "Don't know how to handle {} monitors",
-                states.num_displays()
-            );
         }
     }
     Ok(query()?)
@@ -492,7 +481,8 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
                 focused_label_index - display_count
             }
         }
-        SpaceArg::Extra => 11,
+        SpaceArg::Third => 11,
+        SpaceArg::Fourth => 12,
         SpaceArg::Space(number) => number,
     };
     eprintln!("focus_space: label_index={}", label_index);
@@ -500,7 +490,7 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
         1 => {
             focus_space_by_label(label_index)?;
         }
-        2 | 3 => {
+        _ => {
             // This is to bring both desktops to focus
             let neighbor_label_index = match label_index % 2 {
                 0 => label_index - 1,
@@ -517,12 +507,6 @@ pub fn focus_space(space: SpaceArg) -> Result<()> {
                 }
             }
             focus_space_by_label(label_index)?;
-        }
-        _ => {
-            bail!(
-                "Don't know how to handle {} monitors",
-                states.num_displays()
-            );
         }
     }
 
@@ -572,7 +556,7 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
                     };
                     yabai_message(&["window", op.as_str(), &next_window.to_string()])?;
                 }
-                2 | 3 => {
+                _ => {
                     let neighbor_space = neighbor_space(&states, direction);
                     let neighbor_space = match neighbor_space {
                         None => {
@@ -631,12 +615,6 @@ pub fn operate_window(op: WindowOp, direction: WindowArg) -> Result<()> {
                             yabai_message(&["space", "--focus", &neighbor_space.label])?;
                         }
                     };
-                }
-                _ => {
-                    bail!(
-                        "Don't know how to handle {} monitors",
-                        states.num_displays()
-                    );
                 }
             }
         }
