@@ -125,7 +125,7 @@ pub struct Window {
     subrole: String,
     display: u32,
     space: u32,
-    level: u32,
+    level: i32,
     opacity: f32,
     #[serde(rename = "split-type")]
     split_type: String,
